@@ -11,17 +11,19 @@ def make_p_n_k_table(self, n, k, **kwargs):
         self.p_n_k_table = [[None for _ in range(table_columns)] for _ in range(table_rows)]
 
         self.p_n_k_table[0][0] = 1
-        #print(self.p_n_k_table)
+
         for i in range(1, n+1):
             self.p_n_k_table[0][i] = 0
 
         for i in range(1, k+1):
             self.p_n_k_table[i][0] = 1
 
-        #print(self.p_n_k_table)
+
     else:
+        # Extend table with more columns
         if len(self.p_n_k_table[0]) < (n+1):
-            for i in range(k+1):
+            existing_rows = len(self.p_n_k_table)
+            for i in range(existing_rows):
                 self.p_n_k_table[i] += [None]*(n+1-len(self.p_n_k_table[i]))
 
         #print('more rows: ', n, k, len(self.p_n_k_table))
@@ -70,7 +72,7 @@ def make_p_of_n_array(self, n, **kwargs):
     if 'sequence' in kwargs:
         method = kwargs['sequence']
     else:
-        if n <= 10000:
+        if n <= 3600:
             method = 'euler'
         else:
             method = 'hardy-ramanujan'
@@ -118,7 +120,7 @@ def make_p_of_n_array(self, n, **kwargs):
         if n <= 3600:
             return self.partition_function(weight=n)
         else:
-            return 'n > 10,000 is not currently supported'
+            return 'n > 3600 is not currently supported'
 
 
 def p_of_n(self, n, **kwargs):
@@ -126,5 +128,5 @@ def p_of_n(self, n, **kwargs):
     if not (self.p_of_n_array is not None and len(self.p_of_n_array) >= n+1):
         self.make_p_of_n_array(n, **kwargs)
 
-    return self.p_of_n_array[n]
+    return 0 if n < 0 else self.p_of_n_array[n]
 
