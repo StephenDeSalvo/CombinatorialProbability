@@ -1,29 +1,13 @@
+""" @file _iterator_methods.py
+    @brief Implementation of methods related to combinatorial structures and iteration.
 
+"""
 
-# def next_object(self, part_sizes_list):
-
-#     flag = False
-#     if numpy.sum(part_sizes_list) == 1:
-#         flag = True
-
-#     index = len(part_sizes_list)-1
-#     while index >= 0 and part_sizes_list[index] == 1:
-#         index -= 1
-
-#     if index < 0:
-#         flag = True
-
-#     part_sizes_list[index] -= 1
-#     part_sizes_list += [1]
-
-#     if part_sizes_list[index] < 0:
-#         flag = True
-
-#     return part_sizes_list, flag
 
 
 def next_object(self, component_mulitplicities):
-    """
+    """Given an integer partition, generates the next object in the sequence.
+
     Reference
     ---------
     Modified from Tim Peter's posting to accomodate a k value:

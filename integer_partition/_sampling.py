@@ -1,14 +1,40 @@
+""" @file _sampling.py
+    @brief Functions related to random sampling of integer partitions.
 
+    A collection of functions which generate random integer partitions each according to a different
+    method.  The sampling function is the one to call with method='rejection' specified, for example.
+
+"""
+
+
+# Cleaner code to just do my_dict[element] += 1 rather than check if element is in my_dict each time
 from collections import defaultdict
 
+# Arbitrary precision random integer.  DO NOT USE scipy or numpy's version as they are only int64!
 from random import randint
 
 import numpy
+
 from scipy.stats import geom, uniform
 
 
 def sampling(self, **kwargs):
+    """Sets up the parameters for a given method and invokes it.
 
+    Each method is set up to return a list of random partitions according to size, and the counts 
+    for the number of iterations (i.e., 1+number of rejections) for the given algorithm.  For 
+    algorithms which do not have a rejection the counts list is all 1s.
+
+    The methods currently implemented are as follows:
+        1.  Rejection/Boltzmann sampling.
+        2.  Array method - Nijenhuis and Wilf, i.e., Euler's recursion.
+        3.  Table method - Nijenhuis and Wilf, i.e., the recursive method, p(n,k) recursion
+        4.  PDCDSH - Probabilistic divide-and-conquer (PDC) deterministic second half, using index i=1
+        5.  PDC Recursive - Combination of PDC and and the table method.
+
+    Methods can also have optionally specified parameters, e.g., method_params={'rows':3} for the 
+    PDC Recursive method.
+    """
 
     method = 'rejection' if 'method' not in kwargs else kwargs['method']
 
@@ -27,6 +53,7 @@ def sampling(self, **kwargs):
         kwargs['tilt'] = self.x_
         return pdcdsh_sampling(**kwargs)
 
+    # Table method, unrank, or "The recursive method of nijenhuis and Wilf"
     elif method.lower() in ['recursive', 'nijenhuis-wilf', 'table_method', 'table_only', 'unrank']:
         kwargs['target'] = self.target['n']
         kwargs['table'] = self.p_n_k_table
@@ -36,6 +63,7 @@ def sampling(self, **kwargs):
 
         return table_method_sampling(**kwargs)
 
+    # Array method, using Euler's recursion.
     elif method.lower() in ['array_only', 'euler', 'divisors']:
 
         kwargs['target'] = self.target['n']
@@ -47,18 +75,13 @@ def sampling(self, **kwargs):
 
         return array_method_sampling(**kwargs)
 
-
+    # PDC Recursive hybrid method.  Has additional model parameters. 
     elif method.lower().replace('-', ' ').replace('_', ' ') in ['pdc recursive', 'pdc hybrid']:
-        kwargs['target'] = self.target['n']
 
+        kwargs['target'] = self.target['n']
         kwargs['tilt'] = self.x_
 
         rows = 1 if 'method_params' not in kwargs else 1 if 'rows' not in kwargs['method_params'] else int(kwargs['method_params']['rows'])
-        # if 'method_params' in kwargs:
-        #     rows = kwargs['method_params']['rows']
-        # else:
-        #     rows = 1
-        #print(rows)
 
         kwargs['rows'] = rows
 
@@ -74,22 +97,24 @@ def sampling(self, **kwargs):
 
 
 
-
 # Note that these sampling methods are not class methods.  
-# In the future, they could be implemented separately and more generally based on the arguments in kwargs.
+
 def rejection_sampling(**kwargs):
+    """Generates Z_1, Z_2, ..., Z_n until sum_i i*Z_i = kwargs['target']
+
+    Standard rejection sampling from Boltzmann principles and Fristedt.  Z_i is Geometric 1-x^i, where
+    x can be any number between 0 and 1, but best to use x=exp(-pi / sqrt(6n)).
+
+    kwargs needs to have 'target', 'tilt', and optionally 'size' for number of samples (by default 1).
+    """
     size= 1 if 'size' not in kwargs else kwargs['size']
 
     n = kwargs['target']
     x = kwargs['tilt']
     
-    #distribution = kwargs['distribution']
-    #distribution_params = {} if 'distribution_params' not in kwargs else kwargs['distribution_params']
-
     sample_list = []
     count_list = []
-    #n = self.target['n']
-    #x = self.x_
+
     for i in range(size):
         partition = {}
         counts = 0
@@ -108,11 +133,16 @@ def rejection_sampling(**kwargs):
 
 
 def pdcdsh_sampling(**kwargs):
+    """Generates U_1, Z_2, ..., Z_n until U_1 < P(Z_1 = n - sum_{i>=2} i*Z_i) / P(Z_1 = 0)
+
+    Probabilistic divide-and-conquer deterministic second half method (PDCDSH) by Arratia and DeSalvo.
+    Z_i is Geometric 1-x^i, where x can be any number between 0 and 1, but best to use x=exp(-pi / sqrt(6n)).
+    For integer partition, using index i=1 is optimal.
+
+    kwargs needs to have 'target', 'tilt', and optionally 'size' for number of samples (by default 1).
+    """
 
     size= 1 if 'size' not in kwargs else kwargs['size']
-    
-    # Do not generalize PDCDSH just yet, as there are some subtle pmf issues to be worried about, like max of the pmf.
-    # distribuiton = geom
 
     sample_list = []
     count_list = []
@@ -127,7 +157,6 @@ def pdcdsh_sampling(**kwargs):
             geom_rvs = [int(numpy.floor(numpy.log(u) / ((i+1)*numpy.log(x)))) for i, u in enumerate(uniform().rvs(n))]
             partition = {(i+2):y for i, y in enumerate(geom_rvs[1:]) if y != 0}
 
-            #partition = {(i+2):y for i, y in enumerate([geom.rvs(1-x**i)-1 for i in range(2, n+1) if x**i != 1.0]) if y != 0}
             U = uniform().rvs(size=1)
             residual = int(n - numpy.sum([x*y for x,y in partition.items()]))
             if U < geom.pmf(residual, 1-x, -1) / geom.pmf(0, 1-x, -1):
@@ -145,16 +174,20 @@ def pdcdsh_sampling(**kwargs):
 
 
 def binary_index_search_helper(sorted_array, value, lower, upper):
-    """ Binary search helper function when element is not necessarily in list, returns index of value ASSUMING value IS IN THE RANGE OF VALUES IN THE SORTED ARRAY.
+    """Binary search of subset of sorted array when element is not necessarily in list.
 
-    For my application, this should always be the case.  BUT, it also happens to work for values outside the range.
+    Also works for values outside the range, just make sure the array is sorted!
 
-    JUST MAKE SURE THE ARRAY IS SORTED!!!
-
+    Arguments:
+        sorted_array (array): sorted (!!!!) array of random access values
+        value: value to search for within the array.
+        lower: lower index of lower bound
+        upper: index of upper bound
     """
+
     midpoint = int(upper - (upper - lower)/2)
     mid_value = sorted_array[midpoint]
-    #print(midpoint, mid_value, lower, upper)
+
     if midpoint <= lower:
         return lower
     if mid_value == value:
@@ -165,12 +198,13 @@ def binary_index_search_helper(sorted_array, value, lower, upper):
         return binary_index_search_helper(sorted_array, value, midpoint, upper)
     
 def binary_index_search(sorted_array, value):
-    """ Binary search when element is not necessarily in list, returns index of value ASSUMING value IS IN THE RANGE OF VALUES IN THE SORTED ARRAY.
+    """Binary search of sorted array when element is not necessarily in list.
 
-    For my application, this should always be the case.  BUT, it also happens to work for values outside the range.
+    Also works for values outside the range, just make sure the array is sorted!
 
-    JUST MAKE SURE THE ARRAY IS SORTED!!!
-
+    Arguments:
+        sorted_array (array): sorted (!!!!) array of random access values
+        value: value to search for within the (entirety of the) array.
     """
     n = len(sorted_array)
     if n == 0:
@@ -179,7 +213,7 @@ def binary_index_search(sorted_array, value):
         return 0 if value <= sorted_array[0] else 1
     elif n == 2:
         return 0 if value <= sorted_array[0] else 1 if value <= sorted_array[1] else 2
-    else:
+    else: # n is at least 3
         midpoint = int(n/2)
         lower = 0
         upper = n
@@ -188,6 +222,10 @@ def binary_index_search(sorted_array, value):
 
 
 def array_method_sampling(**kwargs):
+    """Generates samples according to Nijenhuis and Wilf's Combinatorial Algorithms, Algorithm RANPAR (Page 75).
+
+    Utilizes Euler's recursion n*p(n) = sum_d sigma(d) p(n-d) to generate partitions.
+    """
 
     size= 1 if 'size' not in kwargs else kwargs['size']
     array = kwargs['array']
@@ -223,7 +261,15 @@ def array_method_sampling(**kwargs):
 
 
 def table_method_sampling(**kwargs):
-    """Finished Debugging"""
+    """Generates samples according to Nijenhuis and Wilf's Combinatorial Algorithms, using 2D recursion.
+
+    Uses the recursion p(k,n) = p(k-1,n) + p(k, n-k) to generate partitions one part at a time.
+
+    The largest cost is that of creating and storing the table.
+
+    If kwargs has a rows parameter, it will sample from the set of partitions of n into parts 
+    of size at most rows.
+    """
 
     size= 1 if 'size' not in kwargs else kwargs['size']
     table = kwargs['table']
@@ -273,6 +319,15 @@ def table_method_sampling(**kwargs):
 
 
 def pdc_recursive_method_sampling(**kwargs):
+    """Combines the Rejection/Boltzmann and table methods.
+
+    Generates (Z_k+1, ..., Z_n) like in rejection sampling.
+    Accepts/Rejects this variate according to PDC
+    Samples partitions of m with parts of size at most k using table method above.
+
+    Requires kwargs to contain both a tilting parameter as well as table parameters.
+    """
+
 
     size= 1 if 'size' not in kwargs else kwargs['size']
     
