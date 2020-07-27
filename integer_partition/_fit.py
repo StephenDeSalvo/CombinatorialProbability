@@ -57,7 +57,7 @@ def fit(self, **kwargs):
     make_array = None if 'make_array' not in kwargs else kwargs['make_array']
     array_size = None if 'array_size' not in kwargs else kwargs['array_size']
     make_table = None if 'make_table' not in kwargs else kwargs['make_table']
-    rows = None if 'rows' not in kwargs else kwargs['rows']
+    table_rows = None if 'table_rows' not in kwargs else kwargs['table_rows']
     tilt = None if 'make_tilt' not in kwargs else kwargs['make_tilt']
 
 
@@ -73,9 +73,9 @@ def fit(self, **kwargs):
         columns = self.target['n']
 
         # if no size is specified, use weight and max part size (by default weight)
-        rows =  int(rows) if rows is not None else self.target['n'] if 'k' not in self.target else self.target['k']
+        table_rows =  int(table_rows) if table_rows is not None else self.target['n'] if 'k' not in self.target else self.target['k']
 
-        self.make_p_n_k_table(columns, rows, **kwargs)
+        self.make_p_n_k_table(columns, table_rows, **kwargs)
 
 
     if tilt is not None:

@@ -17,6 +17,9 @@ import numpy
 
 from scipy.stats import geom, uniform
 
+# Used to multiply very large integers with very small floating point numbers
+from decimal import Decimal
+
 
 def sampling(self, **kwargs):
     """Sets up the parameters for a given method and invokes it.
@@ -69,8 +72,10 @@ def sampling(self, **kwargs):
         kwargs['target'] = self.target['n']
         kwargs['array'] = self.p_of_n
 
+        n = self.target['n']
+
         
-        if self.p_of_n_table is None or len(self.p_of_n_table) < n:
+        if self.p_of_n_array is None or len(self.p_of_n_array) < n:
             self.make_p_of_n_array(n, **kwargs)
 
         return array_method_sampling(**kwargs)
@@ -336,8 +341,19 @@ def pdc_recursive_method_sampling(**kwargs):
     rows = kwargs['rows']
     n = kwargs['target']
     
-    row_max = max([table[rows][i]*x**(i) for i in range(n+1)])
-    probs = [table[rows][i]*x**(i)/row_max for i in range(n+1)]
+    # row_max = max([table[rows][i]*x**(i) for i in range(n+1)])
+    # probs = [table[rows][i]*x**(i)/row_max for i in range(n+1)]
+
+    # Sometimes you have a very large integer and a very small decimal value
+    try:
+        floating_row = [table[rows][i]*x**(i) for i in range(n+1)]
+    except OverflowError as e:
+        floating_row = [Decimal(table[rows][i])*Decimal(x)**Decimal(i) for i in range(n+1)]
+
+    row_max = max(floating_row)
+    probs = [y/row_max for y in floating_row]
+
+
 
     #print(rows)
 
