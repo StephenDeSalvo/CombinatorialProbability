@@ -1,7 +1,7 @@
 
 
-import desalvo.random.conditional_distribution as conditional_distribution
-import desalvo.random.distribution_lambda as distribution_lambda
+import desalvo.probability.conditional_distribution as conditional_distribution
+import desalvo.probability.distribution_lambda as distribution_lambda
 
 class PDC:
     def __init__(self, **kwargs):

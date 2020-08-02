@@ -56,7 +56,8 @@ class IntegerPartition(CombinatorialSequence, CombinatorialStructure):
     from ._partition_function import partition_function
 
     # The method which generates samples according to a prescribed method
-    from ._sampling import sampling
+    from ._sampling import sampling, table_method_sampling, pdc_recursive_method_sampling
+    # Note: table_method_sampling is a member function because it dynamically allocates a larger table on demand.
 
     # Utilized by CombinatorialStructure to generate partitions one at a time.
     from ._iterator_methods import next_object

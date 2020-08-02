@@ -45,7 +45,12 @@ def sampling(self, **kwargs):
     if method.lower() in ['rejection', 'boltzmann']:
 
         kwargs['target'] = self.target['n']
+
+        if not hasattr(self, "x_"):
+            if len(self.target.keys()) == 1 and 'n' in self.target:
+                self.x_ = numpy.exp(-numpy.pi / numpy.sqrt(6*self.target['n']))
         kwargs['tilt'] = self.x_
+
         #kwargs['distribution'] = geom
         #kwargs['distribution_params'] = {'loc':-1}
         return rejection_sampling(**kwargs)
@@ -53,24 +58,32 @@ def sampling(self, **kwargs):
     # Probabilistic divide-and-conquer: deterministic second half: Sample (Z_2, Z_3, ..., Z_n) --> Until U < P(Z_1 = n-sum_{i\geq 2} i*z_i) / max_j P(Z_1=j)
     elif method.lower() in ['pdcdsh', 'pdc-dsh']:
         kwargs['target'] = self.target['n']
+
+        if not hasattr(self, "x_"):
+            if len(self.target.keys()) == 1 and 'n' in self.target:
+                self.x_ = numpy.exp(-numpy.pi / numpy.sqrt(6*self.target['n']))
         kwargs['tilt'] = self.x_
+
         return pdcdsh_sampling(**kwargs)
 
     # Table method, unrank, or "The recursive method of nijenhuis and Wilf"
     elif method.lower() in ['recursive', 'nijenhuis-wilf', 'table_method', 'table_only', 'unrank']:
+
         kwargs['target'] = self.target['n']
-        kwargs['table'] = self.p_n_k_table
+
         n = self.target['n']
         if self.p_n_k_table is None or len(self.p_n_k_table) < n or len(self.p_n_k_table[0]) < n:
             self.make_p_n_k_table(n,n,**kwargs)
 
-        return table_method_sampling(**kwargs)
+        kwargs['table'] = self.p_n_k_table
+
+        # TODO: Implement dynamic allocation of table while respecting table method with inputs of n and k.
+        return self.table_method_sampling(**kwargs)
 
     # Array method, using Euler's recursion.
     elif method.lower() in ['array_only', 'euler', 'divisors']:
 
         kwargs['target'] = self.target['n']
-        kwargs['array'] = self.p_of_n
 
         n = self.target['n']
 
@@ -78,12 +91,18 @@ def sampling(self, **kwargs):
         if self.p_of_n_array is None or len(self.p_of_n_array) < n:
             self.make_p_of_n_array(n, **kwargs)
 
+        kwargs['array'] = self.p_of_n
+
         return array_method_sampling(**kwargs)
 
     # PDC Recursive hybrid method.  Has additional model parameters. 
     elif method.lower().replace('-', ' ').replace('_', ' ') in ['pdc recursive', 'pdc hybrid']:
 
         kwargs['target'] = self.target['n']
+
+        if not hasattr(self, "x_"):
+            if len(self.target.keys()) == 1 and 'n' in self.target:
+                self.x_ = numpy.exp(-numpy.pi / numpy.sqrt(6*self.target['n']))
         kwargs['tilt'] = self.x_
 
         rows = 1 if 'method_params' not in kwargs else 1 if 'rows' not in kwargs['method_params'] else int(kwargs['method_params']['rows'])
@@ -92,17 +111,18 @@ def sampling(self, **kwargs):
 
         n = self.target['n']
 
-
         if self.p_n_k_table is None or len(self.p_n_k_table) < rows or len(self.p_n_k_table[0]) < n:
             self.make_p_n_k_table(n,rows,**kwargs)
 
         kwargs['table'] = self.p_n_k_table
 
-        return pdc_recursive_method_sampling(**kwargs)
+        return self.pdc_recursive_method_sampling(**kwargs)
 
 
 
-# Note that these sampling methods are not class methods.  
+# Note that these sampling methods are not class methods, except for table method because it dynamically
+# allocates a larger table as needed.  This is to avoid having to create the full n x n table and also
+# avoid the tediousness of finding the right sized table to create.  
 
 def rejection_sampling(**kwargs):
     """Generates Z_1, Z_2, ..., Z_n until sum_i i*Z_i = kwargs['target']
@@ -265,7 +285,7 @@ def array_method_sampling(**kwargs):
     return sample_list, count_list
 
 
-def table_method_sampling(**kwargs):
+def table_method_sampling(self, **kwargs):
     """Generates samples according to Nijenhuis and Wilf's Combinatorial Algorithms, using 2D recursion.
 
     Uses the recursion p(k,n) = p(k-1,n) + p(k, n-k) to generate partitions one part at a time.
@@ -323,7 +343,7 @@ def table_method_sampling(**kwargs):
 
 
 
-def pdc_recursive_method_sampling(**kwargs):
+def pdc_recursive_method_sampling(self, **kwargs):
     """Combines the Rejection/Boltzmann and table methods.
 
     Generates (Z_k+1, ..., Z_n) like in rejection sampling.
@@ -382,7 +402,7 @@ def pdc_recursive_method_sampling(**kwargs):
                     local_kwargs['method'] = 'table_only'
                     local_kwargs['table'] = table
                     local_kwargs['size'] = 1
-                    local_partition = table_method_sampling(**local_kwargs)
+                    local_partition = self.table_method_sampling(**local_kwargs)
                     #print(local_partition)
                     
                     # update is ok because part sizes are disjoint
