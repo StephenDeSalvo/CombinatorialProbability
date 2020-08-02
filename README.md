@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Why?
 This library was created to perform operations like iterating or random sampling of combinatorial structures like integer partition, permutations, set partitions etc.
 
@@ -26,8 +25,3 @@ Additional parameters for a given method should be in the form of a dictionary m
 	ip.sampling(size=10, method='table_only')
 	ip.sampling(size=10, method='array_only')
 	ip.sampling(size=10, method='pdc-recursive', method_params={'rows': 3})
-
-=======
-# CombinatorialProbability
-Code related to Combinatorial Probability
->>>>>>> origin/master
