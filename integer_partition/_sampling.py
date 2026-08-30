@@ -10,6 +10,9 @@
 # Cleaner code to just do my_dict[element] += 1 rather than check if element is in my_dict each time
 from collections import defaultdict
 
+# Exact on arbitrary-precision ints, unlike anything that goes through floats.
+from bisect import bisect_left
+
 # Arbitrary precision random integer.  DO NOT USE scipy or numpy's version as they are only int64!
 from random import randint
 
@@ -198,54 +201,6 @@ def pdcdsh_sampling(**kwargs):
 
 
 
-def binary_index_search_helper(sorted_array, value, lower, upper):
-    """Binary search of subset of sorted array when element is not necessarily in list.
-
-    Also works for values outside the range, just make sure the array is sorted!
-
-    Arguments:
-        sorted_array (array): sorted (!!!!) array of random access values
-        value: value to search for within the array.
-        lower: lower index of lower bound
-        upper: index of upper bound
-    """
-
-    midpoint = int(upper - (upper - lower)/2)
-    mid_value = sorted_array[midpoint]
-
-    if midpoint <= lower:
-        return lower
-    if mid_value == value:
-        return midpoint
-    elif mid_value > value:
-        return binary_index_search_helper(sorted_array, value, lower, midpoint)
-    else:
-        return binary_index_search_helper(sorted_array, value, midpoint, upper)
-    
-def binary_index_search(sorted_array, value):
-    """Binary search of sorted array when element is not necessarily in list.
-
-    Also works for values outside the range, just make sure the array is sorted!
-
-    Arguments:
-        sorted_array (array): sorted (!!!!) array of random access values
-        value: value to search for within the (entirety of the) array.
-    """
-    n = len(sorted_array)
-    if n == 0:
-        return 0
-    elif n == 1:
-        return 0 if value <= sorted_array[0] else 1
-    elif n == 2:
-        return 0 if value <= sorted_array[0] else 1 if value <= sorted_array[1] else 2
-    else: # n is at least 3
-        midpoint = int(n/2)
-        lower = 0
-        upper = n
-        
-        return binary_index_search_helper(sorted_array, value, lower, upper)
-
-
 def array_method_sampling(**kwargs):
     """Generates samples according to Nijenhuis and Wilf's Combinatorial Algorithms, Algorithm RANPAR (Page 75).
 
@@ -294,48 +249,51 @@ def table_method_sampling(self, **kwargs):
 
     If kwargs has a rows parameter, it will sample from the set of partitions of n into parts 
     of size at most rows.
+
+    Numbering.  The partitions of n with parts of size at most k occupy positions
+    1..table[k][n], ordered by largest part.  Exactly table[j][n] - table[j-1][n] of
+    them have largest part equal to j, so those sit at positions
+    table[j-1][n]+1 .. table[j][n].  Decoding a variate is therefore: find the least j
+    with variate <= table[j][n], emit j, drop the partitions ranked below it, and carry
+    on with what is left of n and parts now capped at j.
     """
 
-    size= 1 if 'size' not in kwargs else kwargs['size']
+    size = 1 if 'size' not in kwargs else kwargs['size']
     table = kwargs['table']
 
     count_list = [1]*size
     sample_list = []
-    lower = 0
 
-    for i in range(size):
-        n = int(kwargs['target'])
-        k = int(n) if 'rows' not in kwargs else int(kwargs['rows'])
-        upper = table[k][n]
+    target = int(kwargs['target'])
+    row_cap = target if 'rows' not in kwargs else int(kwargs['rows'])
 
+    for _ in range(size):
+        n = target
+        # A part can never exceed what is left to spend, whatever the cap says.
+        k = min(row_cap, n)
         part_size = []
-        max_size = k
-        variate = randint(lower, upper)
-        #variate = U.rvs()
-        #variate = 27
-        #counter = 0
-        while n > 0 and max_size > 0 and variate > 0:
-            #counter += 1
-            column = [table[i][n] for i in range(max_size+1)]
-            max_size = 1 + binary_index_search(column, variate)
 
-            part_size.append(max_size)
+        # random.randint is inclusive at BOTH ends. The valid ranks are 1..table[k][n];
+        # rank 0, or table[k][n]+1, decodes to a part bigger than n.
+        variate = randint(1, table[k][n]) if n > 0 else 0
 
-            #print(column, variate, max_size, n)
+        while n > 0:
+            if k <= 1:
+                part_size += [1]*n
+                break
+            column = [table[j][n] for j in range(k+1)]
+            # Least j with variate <= column[j]. column[0] is 0 whenever n > 0 and
+            # variate >= 1, so j >= 1; column[k] >= variate, so j <= k <= n. The part
+            # can therefore never exceed the cap nor the weight remaining.
+            j = bisect_left(column, variate)
+            part_size.append(j)
+            variate -= table[j-1][n]
+            n -= j
+            k = min(j, n)
 
-            variate = variate - table[max_size-1][n]
-            n = n - max_size
-
-        # Fill in remaining 1s
-        part_size += [1]*n
-
-        #print(part_size)
         partition = {}
         for part in part_size:
-            if part in partition:
-                partition[part] += 1
-            else:
-                partition[part] = 1
+            partition[part] = partition.get(part, 0) + 1
 
         sample_list.append(partition)
 
@@ -404,9 +362,15 @@ def pdc_recursive_method_sampling(self, **kwargs):
                     local_kwargs['size'] = 1
                     local_partition = self.table_method_sampling(**local_kwargs)
                     #print(local_partition)
-                    
-                    # update is ok because part sizes are disjoint
-                    partition.update(local_partition[0][0])
+
+                    # The two halves are disjoint by construction: the geometric
+                    # variates above only produce parts > rows, and the table
+                    # method only parts <= rows. Add rather than update anyway —
+                    # dict.update() silently REPLACES a shared key, so when the
+                    # table method used to return an oversized part it destroyed
+                    # the geometric multiplicity and the sample came out light.
+                    for part, multiplicity in local_partition[0][0].items():
+                        partition[part] = partition.get(part, 0) + multiplicity
 
             counts += 1
 
