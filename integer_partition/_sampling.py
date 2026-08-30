@@ -205,9 +205,19 @@ def array_method_sampling(**kwargs):
     """Generates samples according to Nijenhuis and Wilf's Combinatorial Algorithms, Algorithm RANPAR (Page 75).
 
     Utilizes Euler's recursion n*p(n) = sum_d sigma(d) p(n-d) to generate partitions.
+
+    Euler's recursion is m*p(m) = sum over d>=1, j>=1 of d*p(m - j*d), so the move
+    "add j parts of size d" carries weight d*p(m - j*d) against a total of exactly
+    m*p(m).  Picking a move is therefore a walk along the cumulative weights, done
+    in whole numbers: p(m) is an arbitrary-precision integer, and turning these
+    weights into probabilities would put a huge integer over a huge integer and
+    round the answer.
+
+    Only the pairs with j*d <= m carry any weight, and there are about m*log(m) of
+    those, not the n^2 that a j and d both running to n would visit.
     """
 
-    size= 1 if 'size' not in kwargs else kwargs['size']
+    size = 1 if 'size' not in kwargs else kwargs['size']
     array = kwargs['array']
 
     count_list = [1]*size
@@ -215,26 +225,33 @@ def array_method_sampling(**kwargs):
 
     n = int(kwargs['target'])
 
-    for i in range(size):
-        m = int(n)
+    # p(0..n) once up front. This used to be a bound-method call, with kwargs, in
+    # the innermost loop -- so it ran n^2 times per part chosen, per sample.
+    p = [array(k) for k in range(n + 1)]
+
+    for _ in range(size):
+        m = n
         partition = defaultdict(int)
 
         while m > 0:
+            variate = randint(1, m * p[m])
+            cumulative = 0
+            chosen = None
+            for d in range(1, m + 1):
+                # jd = j*d walks d, 2d, 3d, ... so j*d <= m always holds and each
+                # (j, d) is visited exactly once.
+                for jd in range(d, m + 1, d):
+                    cumulative += d * p[m - jd]
+                    if cumulative >= variate:
+                        chosen = (jd // d, d)
+                        break
+                if chosen is not None:
+                    break
 
-            j_d_to_weight = {}
-            for d in range(1,n+1):
-                for j in range(1, n+1):
-                    weight = d * array(m - j*d) / (m*array(m))
-                    if weight > 0:
-                        j_d_to_weight[str(j)+'_'+str(d)] = weight
-            #print(numpy.sum(list(j_d_to_weight.values())))
-
-            res = numpy.random.choice(list(j_d_to_weight.keys()), p=list(j_d_to_weight.values()))
-            j, d = [int(x) for x in res.split('_')]
-            #print(j,d)
+            j, d = chosen
             partition[d] += j
-            m -= j*d
-            #print(m)
+            m -= j * d
+
         sample_list.append(dict(partition))
 
     return sample_list, count_list

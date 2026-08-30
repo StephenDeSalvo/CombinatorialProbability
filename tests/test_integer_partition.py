@@ -211,6 +211,31 @@ def test_sampler_is_uniform(method):
         f'partitions of {n} (chi-square p={p_value:.2e})')
 
 
+def test_array_method_is_uniform_on_a_larger_support():
+    """The array method picks its move by an exact integer walk over Euler's
+    weights, rather than by normalising them into floats.
+
+    It is quick enough to check against a bigger support than the shared
+    uniformity test can afford: 77 partitions of 12, not 22 of 8.
+    """
+    from scipy.stats import chisquare
+
+    n = 12
+    expected_support = all_partitions(n)
+    counts = collections.Counter(
+        as_tuple(p) for p in draw(fitted(n), 'array_only', len(expected_support) * 300))
+
+    assert set(counts) <= set(expected_support), (
+        f'array_only produced a non-partition: {set(counts) - set(expected_support)}')
+    assert len(counts) == len(expected_support), (
+        f'array_only never reached {len(expected_support) - len(counts)} of the '
+        f'{len(expected_support)} partitions of {n}')
+
+    observed = [counts.get(part, 0) for part in expected_support]
+    _, p_value = chisquare(observed)
+    assert p_value > 0.001, f'array_only not uniform over p({n}) (chi-square p={p_value:.2e})'
+
+
 @pytest.mark.parametrize('rows', [2, 3])
 def test_pdc_recursive_is_uniform(rows):
     """Same check for the hybrid, which has the most moving parts."""
