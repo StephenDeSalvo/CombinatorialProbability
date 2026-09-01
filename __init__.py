@@ -6,6 +6,8 @@ from .folder import Folder
 
 from .integer_partition import IntegerPartition
 
+from .set_partition import SetPartition
+
 
 
 
